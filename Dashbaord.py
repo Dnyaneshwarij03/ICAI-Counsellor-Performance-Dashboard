@@ -1039,7 +1039,109 @@ st.markdown("---")
 # ─────────────────────────────────────────────────────────────────
 # SECTION 6 — EFFICIENCY DISTRIBUTION
 # ─────────────────────────────────────────────────────────────────
+# SECTION — MOST EFFICIENT BRANCHES
+# ─────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="section-header">🏆 Most Efficient Branches</div>',
+    unsafe_allow_html=True
+)
 
+st.caption(
+    "Branches achieving strong student attendance with better participation and optimized lecture duration."
+)
+
+# Create branch duration data
+branch_duration = (
+    filt.groupby("Branch_Name")["Lecture_Duration_Minutes"]
+    .mean()
+    .reset_index()
+    .rename(columns={
+        "Lecture_Duration_Minutes": "Avg_Duration_Min"
+    })
+)
+
+# Merge with branch summary
+branch_eff = filt_branch.merge(
+    branch_duration,
+    on="Branch_Name",
+    how="left"
+)
+
+# Remove invalid rows
+branch_eff = branch_eff[
+    (branch_eff["Students_Attended"] > 0) &
+    (branch_eff["Participation_Rate"] > 0) &
+    (branch_eff["Avg_Duration_Min"] > 0)
+].copy()
+
+# Efficiency score
+branch_eff["Efficiency_Score"] = (
+    (
+        branch_eff["Students_Attended"] *
+        branch_eff["Participation_Rate"]
+    ) / branch_eff["Avg_Duration_Min"]
+)
+
+# Top branches
+top_branches = (
+    branch_eff.sort_values(
+        "Efficiency_Score",
+        ascending=False
+    )
+    .head(6)
+)
+
+# Cards layout
+cols = st.columns(3)
+
+for idx, (_, row) in enumerate(top_branches.iterrows()):
+
+    with cols[idx % 3]:
+
+        st.markdown(f"""
+        <div style="
+            background:white;
+            padding:20px;
+            border-radius:16px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.08);
+            border-left:6px solid #22c55e;
+            margin-bottom:20px;
+        ">
+
+        <h4 style="
+            margin:0;
+            color:#166534;
+            font-size:20px;
+        ">
+            🏆 {row['Branch_Name']}
+        </h4>
+
+        <hr style="margin:12px 0;">
+
+        <p style="margin:6px 0; font-size:15px;">
+            👥 <b>Students Attended:</b>
+            {int(row['Students_Attended']):,}
+        </p>
+
+        <p style="margin:6px 0; font-size:15px;">
+            📈 <b>Participation:</b>
+            {row['Participation_Rate']:.1f}%
+        </p>
+
+        <p style="margin:6px 0; font-size:15px;">
+            ⏱️ <b>Avg Duration:</b>
+            {row['Avg_Duration_Min']:.0f} Min
+        </p>
+
+        <p style="margin:6px 0; font-size:15px;">
+            🎯 <b>Efficiency Score:</b>
+            {row['Efficiency_Score']:.1f}
+        </p>
+
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("---")
 # ─────────────────────────────────────────────────────────────────
 # SECTION 7 — COUNSELLOR PERFORMANCE TABLE
 # ─────────────────────────────────────────────────────────────────
@@ -1069,6 +1171,7 @@ display_df = display_df[[
     "Counsellor_ID",
     "Branch_Name",
     "Performance",
+    "Sessions_Conducted",
     "Students_Attended",
     "Participation_Rate",
     "Estimated_Grant",
@@ -1092,6 +1195,7 @@ display_df["Cost_Per_Student"] = display_df["Cost_Per_Student"].round(0).astype(
 display_df.rename(columns={
     "Counsellor_ID": "Counsellor ID",
     "Branch_Name": "Branch",
+    "Sessions_Conducted": "Sessions Taken",
     "Students_Attended": "Attended / Participated Student No",
     "Participation_Rate": "Participants %",
     "Estimated_Grant": "Reward (₹)",
