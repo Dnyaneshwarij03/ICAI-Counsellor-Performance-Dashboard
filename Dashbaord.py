@@ -656,126 +656,312 @@ st.markdown("---")
 
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION 2 — BRANCH-WISE GROUPED BAR
+# SECTION 2 — COUNSELLOR TIME EFFICIENCY ANALYSIS
 # ─────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">🏢 Branch-wise: Sessions · Students Attended · Registered</div>', unsafe_allow_html=True)
-st.caption("Click a branch bar to cross-filter the whole dashboard.")
-
-fig_branch = go.Figure()
-fig_branch.add_trace(go.Bar(
-    name="Sessions",
-    x=filt_branch["Branch_Name"],
-    y=filt_branch["Sessions"],
-    marker_color="#3b82f6",
-    text=filt_branch["Sessions"],
-    textposition="auto",
-    hovertemplate="<b>%{x}</b><br>Sessions: %{y}<extra></extra>",
-))
-fig_branch.add_trace(go.Bar(
-    name="Students Attended",
-    x=filt_branch["Branch_Name"],
-    y=filt_branch["Students_Attended"],
-    marker_color="#10b981",
-    text=filt_branch["Students_Attended"],
-    textposition="auto",
-    hovertemplate="<b>%{x}</b><br>Attended: %{y}<extra></extra>",
-))
-fig_branch.add_trace(go.Bar(
-    name="Registered Students",
-    x=filt_branch["Branch_Name"],
-    y=filt_branch["Registrations"].astype(int),
-    marker_color="#f59e0b",
-    text=filt_branch["Registrations"].astype(int),
-    textposition="auto",
-    hovertemplate="<b>%{x}</b><br>Registered: %{y}<extra></extra>",
-))
-fig_branch.update_layout(
-    barmode="group",
-    height=480,
-    xaxis=dict(tickangle=-30, title="Branch"),
-    yaxis_title="Count",
-    legend=dict(orientation="h", y=1.08),
-    plot_bgcolor="white",
-    paper_bgcolor="white",
+# SECTION — COUNSELLOR TIME EFFICIENCY ANALYSIS
+# ─────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="section-header">⏱️ Counsellor Time Efficiency Analysis</div>',
+    unsafe_allow_html=True
 )
 
-event_branch = st.plotly_chart(fig_branch, use_container_width=True, on_select="rerun", key="branch_chart")
-if event_branch and event_branch.selection and event_branch.selection.get("points"):
-    clicked_b = event_branch.selection["points"][0].get("x")
-    if clicked_b:
-        st.query_params["branch"] = str(clicked_b)
-        st.rerun()
+st.caption(
+    "Compare counsellors achieving high attendance in shorter lecture duration versus counsellors taking longer sessions with lower attendance."
+)
+
+eff_df = filt_summary.copy()
+
+# Remove invalid rows
+eff_df = eff_df[
+    (eff_df["Avg_Duration_Min"] > 0) &
+    (eff_df["Students_Attended"] > 0)
+].copy()
+
+# Time efficiency score
+eff_df["Time_Efficiency"] = (
+    eff_df["Students_Attended"] /
+    eff_df["Avg_Duration_Min"]
+)
+
+# Efficient counsellors
+best_eff = (
+    eff_df.sort_values("Time_Efficiency", ascending=False)
+    .head(10)
+    .sort_values("Students_Attended")
+)
+
+# Inefficient counsellors
+worst_eff = (
+    eff_df.sort_values("Time_Efficiency", ascending=True)
+    .head(10)
+    .sort_values("Students_Attended")
+)
+
+# ───────────────── INSIGHT CARDS ─────────────────
+good_count = len(best_eff)
+bad_count = len(worst_eff)
+
+c1, c2 = st.columns(2)
+
+with c1:
+    st.markdown(f"""
+    <div style="
+        background:#dcfce7;
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid #22c55e;
+        margin-bottom:10px;
+    ">
+        <h4 style="color:#166534; margin:0;">
+            ✅ Efficient Counsellors
+        </h4>
+        <p style="margin-top:8px; color:#166534;">
+            {good_count} counsellors achieved higher attendance
+            with lower lecture duration.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c2:
+    st.markdown(f"""
+    <div style="
+        background:#fee2e2;
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid #ef4444;
+        margin-bottom:10px;
+    ">
+        <h4 style="color:#991b1b; margin:0;">
+            ⚠️ Needs Attention
+        </h4>
+        <p style="margin-top:8px; color:#991b1b;">
+            {bad_count} counsellors are taking longer sessions
+            with lower attendance.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ───────────────── SIDE BY SIDE CHARTS ─────────────────
+col1, col2 = st.columns(2)
+
+# ───────────────── LEFT CHART ─────────────────
+with col1:
+
+    st.markdown("### ✅ High Attendance with Lower Lecture Duration")
+
+    fig_best = go.Figure()
+
+    fig_best.add_trace(go.Bar(
+        x=best_eff["Students_Attended"],
+        y=best_eff["Counsellor_ID"].astype(str).tolist(),
+        orientation="h",
+        marker_color="#22c55e",
+        width=0.85,
+        text=[
+            f"{int(a)} Students | {int(t)} Min"
+            for a, t in zip(
+                best_eff["Students_Attended"],
+                best_eff["Avg_Duration_Min"]
+            )
+        ],
+        textposition="outside",
+        hovertemplate=(
+            "<b>Counsellor %{y}</b><br>"
+            "Students Attended: %{x}<br>"
+            "Lecture Duration: %{text}<extra></extra>"
+        )
+    ))
+
+    fig_best.update_layout(
+        height=650,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_title="Students Attended",
+        yaxis_title="Counsellor ID",
+        bargap=0.15,
+        yaxis=dict(type="category"),
+        margin=dict(l=40, r=180, t=40, b=40),
+    )
+
+    fig_best.update_traces(
+        cliponaxis=False
+    )
+
+    st.plotly_chart(fig_best, use_container_width=True)
+
+# ───────────────── RIGHT CHART ─────────────────
+with col2:
+
+    st.markdown("### ⚠️ Longer Sessions with Lower Attendance")
+
+    fig_worst = go.Figure()
+
+    fig_worst.add_trace(go.Bar(
+        x=worst_eff["Students_Attended"],
+        y=worst_eff["Counsellor_ID"].astype(str).tolist(),
+        orientation="h",
+        marker_color="#ef4444",
+        width=0.85,
+        text=[
+            f"{int(a)} Students | {int(t)} Min"
+            for a, t in zip(
+                worst_eff["Students_Attended"],
+                worst_eff["Avg_Duration_Min"]
+            )
+        ],
+        textposition="outside",
+        hovertemplate=(
+            "<b>Counsellor %{y}</b><br>"
+            "Students Attended: %{x}<br>"
+            "Lecture Duration: %{text}<extra></extra>"
+        )
+    ))
+
+    fig_worst.update_layout(
+        height=650,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_title="Students Attended",
+        yaxis_title="Counsellor ID",
+        bargap=0.15,
+        yaxis=dict(type="category"),
+        margin=dict(l=40, r=180, t=40, b=40),
+    )
+
+    fig_worst.update_traces(
+        cliponaxis=False
+    )
+
+    st.plotly_chart(fig_worst, use_container_width=True)
 
 st.markdown("---")
 
 
+
 # ─────────────────────────────────────────────────────────────────
 # SECTION 3 — BRANCH EFFICIENCY — HORIZONTAL BAR (replaces scatter)
-# FIX: Clearer than bubble chart
 # ─────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">⚡ Branch-wise Efficiency Overview</div>', unsafe_allow_html=True)
-st.caption("Color = Avg Efficiency Score. Bar length = Students Attended. Hover for full details.")
-
-eff_sorted = branch_combined.sort_values("Avg_Efficiency", ascending=True).tail(30)
-
-# Color map: red (low) → yellow → green (high)
-def efficiency_color(val, vmin, vmax):
-    ratio = (val - vmin) / (vmax - vmin) if vmax > vmin else 0.5
-    r = int(255 * (1 - ratio))
-    g = int(200 * ratio)
-    return f"rgb({r},{g},60)"
-
-vmin = eff_sorted["Avg_Efficiency"].min()
-vmax = eff_sorted["Avg_Efficiency"].max()
-colors = [efficiency_color(v, vmin, vmax) for v in eff_sorted["Avg_Efficiency"]]
-
-fig_eff = go.Figure(go.Bar(
-    x=eff_sorted["Students_Attended"],
-    y=eff_sorted["Branch_Name"],
-    orientation="h",
-    marker_color=colors,
-    text=[f"Eff: {v:.1f} | Att: {a:,.0f}" for v, a in zip(eff_sorted["Avg_Efficiency"], eff_sorted["Students_Attended"])],
-    textposition="outside",
-    customdata=np.stack([
-        eff_sorted["Sessions"],
-        eff_sorted["Registrations"],
-        eff_sorted["Estimated_Grant"],
-        eff_sorted["Participation_Rate"],
-        eff_sorted["Avg_Efficiency"],
-    ], axis=-1),
-    hovertemplate=(
-        "<b>%{y}</b><br>"
-        "Students Attended: %{x:,}<br>"
-        "Sessions: %{customdata[0]}<br>"
-        "Registered: %{customdata[1]:,}<br>"
-        "Participation Rate: %{customdata[3]:.1f}%<br>"
-        "Avg Efficiency: %{customdata[4]:.1f}<br>"
-        "Reward: ₹%{customdata[2]:,}<extra></extra>"
-    ),
-))
-
-fig_eff.update_layout(
-    height=max(400, len(eff_sorted) * 24),
-    xaxis_title="Students Attended",
-    yaxis_title="",
-    plot_bgcolor="white",
-    paper_bgcolor="white",
-    margin=dict(l=160, r=80),
+# SECTION — COUNSELLOR FREQUENT SESSION MONTH ANALYSIS
+# ─────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="section-header">📅 Counsellor Frequent Session Month Analysis</div>',
+    unsafe_allow_html=True
 )
 
-# Colorbar legend annotation
-fig_eff.add_annotation(
-    x=1.01, y=0.99, xref="paper", yref="paper",
-    text="🟢 High Efficiency &nbsp; 🔴 Low Efficiency",
-    showarrow=False, align="left", font=dict(size=11),
+st.caption(
+    "Identify counsellors conducting unusually high number of sessions within the same month."
 )
 
-event_eff = st.plotly_chart(fig_eff, use_container_width=True, on_select="rerun", key="eff_chart")
-if event_eff and event_eff.selection and event_eff.selection.get("points"):
-    clicked_b2 = event_eff.selection["points"][0].get("y")
-    if clicked_b2:
-        st.query_params["branch"] = str(clicked_b2)
-        st.rerun()
+# Prepare data
+freq_df = filt.copy()
+
+# Convert event date
+freq_df["Event_Date"] = pd.to_datetime(
+    freq_df["Event_Date"],
+    errors="coerce"
+)
+
+# Extract month
+freq_df["Frequent_Month"] = (
+    freq_df["Event_Date"]
+    .dt.strftime("%b-%Y")
+)
+
+# Session count per counsellor per month
+monthly_sessions = (
+    freq_df.groupby(
+        ["Counsellor_ID", "Frequent_Month"]
+    )
+    .size()
+    .reset_index(name="Session_Count")
+)
+
+# Keep highest frequency months
+monthly_sessions = (
+    monthly_sessions
+    .sort_values("Session_Count", ascending=False)
+    .head(25)
+)
+
+# Add performance category
+monthly_sessions["Frequency_Level"] = np.where(
+    monthly_sessions["Session_Count"] >= monthly_sessions["Session_Count"].quantile(0.75),
+    "⚠️ Highly Concentrated",
+    "✅ Balanced"
+)
+
+# Rename columns
+monthly_sessions.rename(columns={
+    "Counsellor_ID": "Counsellor ID",
+    "Frequent_Month": "Frequent Month",
+    "Session_Count": "No. of Sessions"
+}, inplace=True)
+
+# Reset index for Sr No
+monthly_sessions.reset_index(drop=True, inplace=True)
+monthly_sessions.index += 1
+
+# Style function
+def highlight_frequency(val):
+    if "Highly" in str(val):
+        return "background-color:#fee2e2; color:#991b1b; font-weight:600"
+    return "background-color:#dcfce7; color:#166534; font-weight:600"
+
+styled_matrix = (
+    monthly_sessions.style
+    .map(
+        highlight_frequency,
+        subset=["Frequency_Level"]
+    )
+)
+
+st.dataframe(
+    styled_matrix,
+    use_container_width=True,
+    height=600
+)
+
+# ───────────────── INSIGHT CARDS ─────────────────
+peak_row = monthly_sessions.iloc[0]
+
+c1, c2 = st.columns(2)
+
+with c1:
+    st.markdown(f"""
+    <div style="
+        background:#fee2e2;
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid #ef4444;
+    ">
+        <h4 style="margin:0; color:#991b1b;">
+            ⚠️ Highest Session Concentration
+        </h4>
+        <p style="margin-top:8px; color:#991b1b;">
+            Counsellor ID <b>{peak_row['Counsellor ID']}</b>
+            conducted <b>{peak_row['No. of Sessions']}</b>
+            sessions in <b>{peak_row['Frequent Month']}</b>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c2:
+    st.markdown("""
+    <div style="
+        background:#dbeafe;
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid #3b82f6;
+    ">
+        <h4 style="margin:0; color:#1e40af;">
+            📊 Operational Insight
+        </h4>
+        <p style="margin-top:8px; color:#1e40af;">
+            Repeatedly high session counts in a single month
+            may indicate target rushing or uneven workload distribution.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -853,36 +1039,6 @@ st.markdown("---")
 # ─────────────────────────────────────────────────────────────────
 # SECTION 6 — EFFICIENCY DISTRIBUTION
 # ─────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📊 Efficiency Score Distribution</div>', unsafe_allow_html=True)
-
-col_hist, col_pie = st.columns(2)
-with col_hist:
-    fig_hist = px.histogram(
-        filt_summary, x="Efficiency_Score", nbins=20,
-        title="Efficiency Score Distribution",
-        color_discrete_sequence=["#3b82f6"],
-    )
-    fig_hist.update_layout(
-        height=350, plot_bgcolor="white", paper_bgcolor="white",
-        showlegend=False, xaxis_title="Efficiency Score",
-    )
-    st.plotly_chart(fig_hist, use_container_width=True)
-
-with col_pie:
-    perf_counts = filt_summary["Performance"].value_counts().reset_index()
-    perf_counts.columns = ["Category", "Count"]
-    color_seq = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"]
-    fig_pie = px.pie(
-        perf_counts, names="Category", values="Count",
-        title="Counsellors by Performance Category",
-        color_discrete_sequence=color_seq,
-        hole=0.4,
-    )
-    fig_pie.update_layout(height=350, paper_bgcolor="white")
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-st.markdown("---")
-
 
 # ─────────────────────────────────────────────────────────────────
 # SECTION 7 — COUNSELLOR PERFORMANCE TABLE
